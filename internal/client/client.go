@@ -33,7 +33,8 @@ func (c *CLI) Run() error {
 		c.Logger.ErrorContext(dialCtx, "failed to connect to server", "error", errors.WithStack(err))
 	}
 
-	incomingMessages := make(chan *grammar.Showdown)
+	// Listen for and log incoming messages from the websocket
+	incomingMessages := make(chan grammar.ServerMessage)
 	s := newSubscriber(incomingMessages, c.Logger, c.Timeout)
 	wg := &sync.WaitGroup{}
 	subCtx, subCancel := context.WithCancel(ctx)
@@ -45,12 +46,18 @@ func (c *CLI) Run() error {
 			c.Logger.ErrorContext(ctx, "error running subscriber", "error", err)
 		}
 	})
-	for {
-		select {
-		case m := <-incomingMessages:
-			c.Logger.InfoContext(subCtx, "Received message", "message", m)
-		case <-subCtx.Done():
-			return errors.WithStack(subCtx.Err())
+	wg.Go(func() {
+		for {
+			select {
+			case m := <-incomingMessages:
+				c.Logger.InfoContext(subCtx, "Received message", "message", m)
+			case <-subCtx.Done():
+				c.Logger.InfoContext(subCtx, "context done", "error", subCtx.Err())
+				return
+			}
 		}
-	}
+	})
+	wg.Wait()
+
+	return nil
 }

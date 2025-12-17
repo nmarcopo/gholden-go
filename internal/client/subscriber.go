@@ -11,12 +11,12 @@ import (
 )
 
 type subscriber struct {
-	queue   chan<- *grammar.Showdown
+	queue   chan<- grammar.ServerMessage
 	logger  *slog.Logger
 	timeout time.Duration
 }
 
-func newSubscriber(queue chan<- *grammar.Showdown, logger *slog.Logger, timeout time.Duration) *subscriber {
+func newSubscriber(queue chan<- grammar.ServerMessage, logger *slog.Logger, timeout time.Duration) *subscriber {
 	return &subscriber{
 		queue:   queue,
 		logger:  logger,

@@ -1,7 +1,16 @@
 package grammar
 
-type Showdown struct {
+const (
+	Separator = "|"
+)
+
+type ServerMessage struct {
 	Lines []*Line `(@@ EOL?)+`
+}
+
+// ClientMessage is not added to the parser since we only need to parse messages we receive in plaintext
+type ClientMessage struct {
+	Line *Line
 }
 
 type Line struct {
