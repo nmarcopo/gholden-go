@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"gholden-go/internal/parser"
+	"gholden-go/internal/grammar"
 	"log/slog"
 	"time"
 
@@ -11,12 +11,12 @@ import (
 )
 
 type subscriber struct {
-	queue   chan<- *parser.Showdown
+	queue   chan<- *grammar.Showdown
 	logger  *slog.Logger
 	timeout time.Duration
 }
 
-func newSubscriber(queue chan<- *parser.Showdown, logger *slog.Logger, timeout time.Duration) *subscriber {
+func newSubscriber(queue chan<- *grammar.Showdown, logger *slog.Logger, timeout time.Duration) *subscriber {
 	return &subscriber{
 		queue:   queue,
 		logger:  logger,
@@ -36,7 +36,7 @@ func (p *subscriber) run(ctx context.Context, conn *websocket.Conn) error {
 			continue
 		}
 
-		parsed, err := parser.ShowdownParser.Parse(msg)
+		parsed, err := grammar.ShowdownParser.Parse(msg)
 		if err != nil {
 			p.logger.WarnContext(ctx, "message parse error", "error", err)
 			continue
