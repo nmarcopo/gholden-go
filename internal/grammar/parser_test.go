@@ -43,6 +43,16 @@ func Test_parser_Parse(t *testing.T) {
 				}},
 			}},
 		},
+		{
+			name: "popup",
+			data: []byte(`|popup|You tried to send \"testing123\" to the room \"lobby\" but it failed because you were not in that room.`),
+			want: ServerMessage{Lines: []*Line{
+				{Message: &Message{
+					Command: "popup",
+					Args:    `You tried to send \"testing123\" to the room \"lobby\" but it failed because you were not in that room.`,
+				}},
+			}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

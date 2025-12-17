@@ -24,5 +24,5 @@ type RoomID struct {
 
 type Message struct {
 	Command string `Sep @Ident Sep`
-	Args    string `@String`
+	Args    string `@(~EOL)*`
 }

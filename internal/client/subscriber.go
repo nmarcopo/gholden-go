@@ -39,6 +39,7 @@ func (p *subscriber) run(ctx context.Context, conn *websocket.Conn) error {
 		parsed, err := grammar.ShowdownParser.Parse(msg)
 		if err != nil {
 			p.logger.WarnContext(ctx, "message parse error", "error", err)
+			p.logger.DebugContext(ctx, "detailed error", "error", grammar.Pretty(err))
 			continue
 		}
 		select {
