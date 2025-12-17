@@ -22,7 +22,11 @@ type CLI struct {
 func (c *CLI) Run() error {
 	ctx := context.Background()
 	if c.Logger == nil {
-		c.Logger = slog.New(slog.NewJSONHandler(os.Stdout, nil /* opts */))
+		opts := &slog.HandlerOptions{}
+		if c.Debug {
+			opts.Level = slog.LevelDebug
+		}
+		c.Logger = slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	}
 
 	// Initialize websocket connection
@@ -57,6 +61,34 @@ func (c *CLI) Run() error {
 			}
 		}
 	})
+
+	// Send some messages to the server
+	outgoingMessages := make(chan grammar.ClientMessage)
+	p := newPublisher(outgoingMessages, c.Timeout, c.Logger)
+	pubCtx, pubCancel := context.WithCancel(ctx)
+	defer pubCancel()
+	wg.Go(func() {
+		err := p.Run(pubCtx, conn)
+		pubCancel()
+		if err != nil {
+			c.Logger.ErrorContext(ctx, "error running publisher", "error", err)
+		}
+	})
+	select {
+	case outgoingMessages <- grammar.ClientMessage{
+		Line: &grammar.Line{
+			RoomID: &grammar.RoomID{
+				Room: "lobby",
+			},
+			Message: &grammar.Message{
+				Command: "testing123",
+				Args:    "",
+			},
+		},
+	}:
+	case <-subCtx.Done():
+	}
+
 	wg.Wait()
 
 	return nil
