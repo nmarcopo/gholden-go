@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"gholden-go/internal/parser"
+	"gholden-go/internal/grammar"
 	"log/slog"
 	"os"
 	"sync"
@@ -33,7 +33,7 @@ func (c *CLI) Run() error {
 		c.Logger.ErrorContext(dialCtx, "failed to connect to server", "error", errors.WithStack(err))
 	}
 
-	incomingMessages := make(chan *parser.Showdown)
+	incomingMessages := make(chan *grammar.Showdown)
 	s := newSubscriber(incomingMessages, c.Logger, c.Timeout)
 	wg := &sync.WaitGroup{}
 	subCtx, subCancel := context.WithCancel(ctx)
