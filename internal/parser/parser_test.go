@@ -46,7 +46,7 @@ func Test_parser_Parse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parsed, err := ShowdownParser.Parse([]byte(tt.data))
+			parsed, err := ShowdownParser.Parse(tt.data)
 			require.NoError(t, err, Pretty(err))
 			if diff := cmp.Diff(tt.want, parsed); diff != "" {
 				t.Errorf("Parse() mismatch (-want +got):\n%s", diff)
