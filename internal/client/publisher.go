@@ -4,7 +4,6 @@ import (
 	"context"
 	"gholden-go/internal/grammar"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -25,24 +24,17 @@ func newPublisher(queue <-chan grammar.ClientMessage, timeout time.Duration, log
 	}
 }
 
-func (p *publisher) Run(ctx context.Context, conn *websocket.Conn) error {
+func (p *publisher) run(ctx context.Context, conn *websocket.Conn) error {
 	for {
 		select {
 		case msg := <-p.queue:
-			if msg.Line == nil {
-				return errors.New("no line in message")
+			message, err := grammar.Serialize(msg)
+			if err != nil {
+				p.logger.WarnContext(ctx, "failed to serialize message", "error", err)
+				continue
 			}
-			var serializedMsg strings.Builder
-			if msg.Line.RoomID != nil {
-				serializedMsg.WriteString(msg.Line.RoomID.Room)
-			}
-			serializedMsg.WriteString(grammar.Separator)
-			if msg.Line.Message == nil {
-				return errors.New("message should not be nil")
-			}
-			serializedMsg.WriteString(msg.Line.Message.Command)
 			writeCtx, cancel := context.WithTimeout(ctx, p.timeout)
-			err := conn.Write(writeCtx, websocket.MessageText, []byte(serializedMsg.String()))
+			err = conn.Write(writeCtx, websocket.MessageText, []byte(message))
 			if err != nil {
 				p.logger.WarnContext(writeCtx, "failed to write serialized message", "error", errors.WithStack(err))
 			}

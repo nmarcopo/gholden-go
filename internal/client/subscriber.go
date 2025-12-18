@@ -24,12 +24,16 @@ func newSubscriber(queue chan<- grammar.ServerMessage, logger *slog.Logger, time
 	}
 }
 
+// run reads messages from the websocket, parses them into structs, and sends the structs to the queue
 func (p *subscriber) run(ctx context.Context, conn *websocket.Conn) error {
 	for {
-		msgType, msg, err := conn.Read(ctx)
+		readCtx, cancel := context.WithTimeout(ctx, p.timeout)
+		msgType, msg, err := conn.Read(readCtx)
+		cancel()
 		if err != nil {
-			p.logger.WarnContext(ctx, "websocket read error", "error", errors.WithStack(err))
-			continue
+			// TODO send shutdown signal if this happens
+			p.logger.ErrorContext(ctx, "websocket read error", "error", errors.WithStack(err))
+			return errors.WithStack(err)
 		}
 		if msgType != websocket.MessageText {
 			p.logger.WarnContext(ctx, "websocket message type not supported", "message type", msgType)

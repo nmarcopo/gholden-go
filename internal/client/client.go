@@ -68,7 +68,7 @@ func (c *CLI) Run() error {
 	pubCtx, pubCancel := context.WithCancel(ctx)
 	defer pubCancel()
 	wg.Go(func() {
-		err := p.Run(pubCtx, conn)
+		err := p.run(pubCtx, conn)
 		pubCancel()
 		if err != nil {
 			c.Logger.ErrorContext(ctx, "error running publisher", "error", err)
@@ -81,8 +81,10 @@ func (c *CLI) Run() error {
 				Room: "lobby",
 			},
 			Message: &grammar.Message{
-				Command: "testing123",
-				Args:    "",
+				UnknownMessage: &grammar.UnknownMessage{
+					Command: "testing123",
+					Data:    "",
+				},
 			},
 		},
 	}:
