@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"testing"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -17,17 +19,19 @@ var ShowdownParser = parser{
 				{Name: `EOL`, Pattern: `\n|\r\n`},
 				{Name: `Sep`, Pattern: `\` + Separator},
 				{Name: `Room`, Pattern: `>`},
-				{Name: `Ident`, Pattern: `[a-zA-Z]+`},
+				{Name: `Ident`, Pattern: `[a-z]+`},
 				{Name: `String`, Pattern: `[^\n]+`},
 				{Name: `Whitespace`, Pattern: `[ \t]+`},
 			}),
 		),
 		participle.Elide("Whitespace"),
 	),
+	debug: testing.Testing(),
 }
 
 type parser struct {
 	parser *participle.Parser[ServerMessage]
+	debug  bool
 }
 
 type parserErr struct {
@@ -74,7 +78,11 @@ func Pretty(err error) string {
 }
 
 func (p *parser) Parse(bytes []byte) (ServerMessage, error) {
-	val, err := p.parser.ParseBytes("", bytes)
+	var opts []participle.ParseOption
+	if p.debug {
+		opts = append(opts, participle.Trace(os.Stdout))
+	}
+	val, err := p.parser.ParseBytes("", bytes, opts...)
 	if err != nil {
 		return ServerMessage{}, newParserErr(bytes, err)
 	}
