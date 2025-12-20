@@ -34,7 +34,7 @@ func (c *CLI) Run() error {
 	defer cancel()
 	conn, _, err := websocket.Dial(dialCtx, c.Address, nil /* opts */)
 	if err != nil {
-		c.Logger.ErrorContext(dialCtx, "failed to connect to server", "error", errors.WithStack(err))
+		return errors.WithStack(err)
 	}
 
 	// Listen for and log incoming messages from the websocket
@@ -82,8 +82,8 @@ func (c *CLI) Run() error {
 			},
 			Message: &grammar.Message{
 				UnknownMessage: &grammar.UnknownMessage{
-					Command: "testing123",
-					Data:    "",
+					Command: "testing",
+					Data:    "1234",
 				},
 			},
 		},

@@ -18,6 +18,14 @@ func Serialize(msg ClientMessage) (string, error) {
 	if msg.Line.Message == nil {
 		return "", errors.New("message should not be nil")
 	}
-	//serializedMsg.WriteString(msg.Line.Message.Command)
+	// TODO maybe we shouldn't worry about things the client will never send
+	if msg.Line.Message.ChallstrMessage != nil {
+		serializedMsg.WriteString(msg.Line.Message.ChallstrMessage.Challstr)
+	}
+	if msg.Line.Message.UnknownMessage != nil {
+		serializedMsg.WriteString(msg.Line.Message.UnknownMessage.Command)
+		serializedMsg.WriteString(Separator)
+		serializedMsg.WriteString(msg.Line.Message.UnknownMessage.Data)
+	}
 	return serializedMsg.String(), nil
 }
