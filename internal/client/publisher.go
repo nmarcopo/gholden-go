@@ -33,6 +33,7 @@ func (p *publisher) run(ctx context.Context, conn *websocket.Conn) error {
 				p.logger.WarnContext(ctx, "failed to serialize message", "error", err)
 				continue
 			}
+			p.logger.DebugContext(ctx, "sending message", "message", message)
 			writeCtx, cancel := context.WithTimeout(ctx, p.timeout)
 			err = conn.Write(writeCtx, websocket.MessageText, []byte(message))
 			if err != nil {

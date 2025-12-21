@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// TODO need a different solution for client messages. Format is too different from server messages
 func Serialize(msg ClientMessage) (string, error) {
 	if msg.Line == nil {
 		return "", errors.New("no line in message")
@@ -23,8 +24,10 @@ func Serialize(msg ClientMessage) (string, error) {
 		serializedMsg.WriteString(msg.Line.Message.ChallstrMessage.Challstr)
 	}
 	if msg.Line.Message.UnknownMessage != nil {
-		serializedMsg.WriteString(msg.Line.Message.UnknownMessage.Command)
-		serializedMsg.WriteString(Separator)
+		if msg.Line.Message.UnknownMessage.Command != "" {
+			serializedMsg.WriteString(msg.Line.Message.UnknownMessage.Command)
+			serializedMsg.WriteString(Separator)
+		}
 		serializedMsg.WriteString(msg.Line.Message.UnknownMessage.Data)
 	}
 	return serializedMsg.String(), nil

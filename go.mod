@@ -5,9 +5,9 @@ go 1.25.5
 require (
 	github.com/alecthomas/kong v1.13.0
 	github.com/alecthomas/participle/v2 v2.1.4
-	github.com/alecthomas/repr v0.5.2
 	github.com/coder/websocket v1.8.14
 	github.com/google/go-cmp v0.7.0
+	github.com/google/uuid v1.6.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.11.1
 )

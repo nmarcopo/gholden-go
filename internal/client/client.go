@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"gholden-go/internal/grammar"
 	"log/slog"
 	"os"
@@ -13,16 +14,32 @@ import (
 )
 
 type CLI struct {
-	Address string        `help:"Address to bind to" default:"ws://localhost:8000/showdown/websocket"`
-	Timeout time.Duration `help:"Timeout for WebSocket dials/reads/writes" default:"30s"`
-	Debug   bool          `help:"Enable debug mode"`
-	Logger  *slog.Logger  `kong:"-"`
+	Address       string        `help:"Address to bind to" default:"ws://localhost:8000/showdown/websocket"`
+	LoginEndpoint string        `help:"Address that serves login" default:"https://play.pokemonshowdown.com/api/login"`
+	Timeout       time.Duration `help:"Timeout for individual dials/reads/writes/etc" default:"30s"`
+	Debug         bool          `help:"Enable debug mode"`
+	Logger        *slog.Logger  `kong:"-"`
 }
 
 func (c *CLI) Run() error {
 	ctx := context.Background()
 	if c.Logger == nil {
-		opts := &slog.HandlerOptions{}
+		opts := &slog.HandlerOptions{
+			// Include stacktrace in error logs
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				switch a.Key {
+				case "error":
+					if e, ok := a.Value.Any().(error); ok {
+						a = slog.Group(
+							a.Key,
+							slog.String("error", e.Error()),
+							slog.String("errorVerbose", fmt.Sprintf("%+v", e)),
+						)
+					}
+				}
+				return a
+			},
+		}
 		if c.Debug {
 			opts.Level = slog.LevelDebug
 		}
@@ -50,17 +67,6 @@ func (c *CLI) Run() error {
 			c.Logger.ErrorContext(ctx, "error running subscriber", "error", err)
 		}
 	})
-	wg.Go(func() {
-		for {
-			select {
-			case m := <-incomingMessages:
-				c.Logger.InfoContext(subCtx, "Received message", "message", m)
-			case <-subCtx.Done():
-				c.Logger.InfoContext(subCtx, "context done", "error", subCtx.Err())
-				return
-			}
-		}
-	})
 
 	// Send some messages to the server
 	outgoingMessages := make(chan grammar.ClientMessage)
@@ -74,22 +80,36 @@ func (c *CLI) Run() error {
 			c.Logger.ErrorContext(ctx, "error running publisher", "error", err)
 		}
 	})
-	select {
-	case outgoingMessages <- grammar.ClientMessage{
-		Line: &grammar.Line{
-			RoomID: &grammar.RoomID{
-				Room: "lobby",
-			},
-			Message: &grammar.Message{
-				UnknownMessage: &grammar.UnknownMessage{
-					Command: "testing",
-					Data:    "1234",
+
+	controller := newController(controllerOpts{
+		outgoingMessagesCh: outgoingMessages,
+		incomingMessagesCh: incomingMessages,
+		loginEndpoint:      c.LoginEndpoint,
+		timeout:            c.Timeout,
+		logger:             c.Logger,
+	})
+	if err := controller.handleIncoming(ctx); err != nil {
+		return errors.WithStack(err)
+	}
+
+	/*
+		select {
+		case outgoingMessages <- grammar.ClientMessage{
+			Line: &grammar.Line{
+				RoomID: &grammar.RoomID{
+					Room: "lobby",
+				},
+				Message: &grammar.Message{
+					UnknownMessage: &grammar.UnknownMessage{
+						Command: "testing",
+						Data:    "1234",
+					},
 				},
 			},
-		},
-	}:
-	case <-subCtx.Done():
-	}
+		}:
+		case <-subCtx.Done():
+		}
+	*/
 
 	wg.Wait()
 
