@@ -21,8 +21,7 @@ type CLI struct {
 	Logger        *slog.Logger  `kong:"-"`
 }
 
-func (c *CLI) Run() error {
-	ctx := context.Background()
+func (c *CLI) Run(ctx context.Context) error {
 	if c.Logger == nil {
 		opts := &slog.HandlerOptions{
 			// Include stacktrace in error logs
@@ -47,9 +46,7 @@ func (c *CLI) Run() error {
 	}
 
 	// Initialize websocket connection
-	dialCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	conn, _, err := websocket.Dial(dialCtx, c.Address, nil /* opts */)
+	conn, _, err := websocket.Dial(ctx, c.Address, nil /* opts */)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -58,11 +55,8 @@ func (c *CLI) Run() error {
 	incomingMessages := make(chan grammar.ServerMessage)
 	s := newSubscriber(incomingMessages, c.Logger, c.Timeout)
 	wg := &sync.WaitGroup{}
-	subCtx, subCancel := context.WithCancel(ctx)
-	defer subCancel()
 	wg.Go(func() {
-		err := s.run(subCtx, conn)
-		subCancel()
+		err := s.run(ctx, conn)
 		if err != nil {
 			c.Logger.ErrorContext(ctx, "error running subscriber", "error", err)
 		}
@@ -71,11 +65,8 @@ func (c *CLI) Run() error {
 	// Send some messages to the server
 	outgoingMessages := make(chan grammar.ClientMessage)
 	p := newPublisher(outgoingMessages, c.Timeout, c.Logger)
-	pubCtx, pubCancel := context.WithCancel(ctx)
-	defer pubCancel()
 	wg.Go(func() {
-		err := p.run(pubCtx, conn)
-		pubCancel()
+		err := p.run(ctx, conn)
 		if err != nil {
 			c.Logger.ErrorContext(ctx, "error running publisher", "error", err)
 		}
@@ -91,25 +82,6 @@ func (c *CLI) Run() error {
 	if err := controller.handleIncoming(ctx); err != nil {
 		return errors.WithStack(err)
 	}
-
-	/*
-		select {
-		case outgoingMessages <- grammar.ClientMessage{
-			Line: &grammar.Line{
-				RoomID: &grammar.RoomID{
-					Room: "lobby",
-				},
-				Message: &grammar.Message{
-					UnknownMessage: &grammar.UnknownMessage{
-						Command: "testing",
-						Data:    "1234",
-					},
-				},
-			},
-		}:
-		case <-subCtx.Done():
-		}
-	*/
 
 	wg.Wait()
 

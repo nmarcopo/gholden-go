@@ -1,16 +1,22 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"gholden-go/internal/client"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/alecthomas/kong"
 )
 
 func main() {
-	ctx := kong.Parse(&client.CLI{})
-	if err := ctx.Run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cli := kong.Parse(&client.CLI{}, kong.BindTo(ctx, (*context.Context)(nil)))
+	if err := cli.Run(ctx); err != nil {
 		fmt.Printf("%v\n", err)
 		os.Exit(1)
 	}

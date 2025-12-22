@@ -35,6 +35,7 @@ func (p *subscriber) run(ctx context.Context, conn *websocket.Conn) error {
 			p.logger.ErrorContext(ctx, "websocket read error", "error", errors.WithStack(err))
 			return errors.WithStack(err)
 		}
+		p.logger.DebugContext(ctx, "message received", "type", msgType, "body", string(msg))
 		if msgType != websocket.MessageText {
 			p.logger.WarnContext(ctx, "websocket message type not supported", "message type", msgType)
 			continue
