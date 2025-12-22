@@ -49,7 +49,7 @@ func (c *controller) handleIncoming(ctx context.Context) error {
 		case <-ctx.Done():
 			return errors.WithStack(ctx.Err())
 		case msg := <-c.incomingMessagesCh:
-			c.logger.InfoContext(ctx, "Received incoming message", "message", msg)
+			c.logger.DebugContext(ctx, "Received incoming message", "message", msg)
 			for _, line := range msg.Lines {
 				if line.Message == nil {
 					c.logger.WarnContext(ctx, "Received line without a message", "line", line)
@@ -62,6 +62,8 @@ func (c *controller) handleIncoming(ctx context.Context) error {
 					} else {
 						c.logger.InfoContext(ctx, "login successful")
 					}
+				default:
+					c.logger.InfoContext(ctx, "unsupported message", "message", line)
 				}
 			}
 		}
@@ -110,11 +112,14 @@ func (c *controller) login(ctx context.Context, challstr grammar.ChallstrMessage
 			c.logger.ErrorContext(context.Background(), "failed to close response body", "error", errors.WithStack(err))
 		}
 	}()
+	if resp.StatusCode != http.StatusOK {
+		return errors.Errorf("login request failed with status %s", resp.Status)
+	}
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return errors.Wrap(err, "failed to read response body")
 	}
-	c.logger.DebugContext(ctx, "response from login", "code", resp.StatusCode, "body", string(body))
+	c.logger.DebugContext(ctx, "response from login", "code", resp.StatusCode, "body", string(b))
 	var l loginResponse
 	// Body is prefixed by a `]` character, per the docs https://github.com/smogon/pokemon-showdown/blob/master/PROTOCOL.md
 	if err := json.Unmarshal(bytes.TrimPrefix(b, []byte("]")), &l); err != nil {
