@@ -28,14 +28,9 @@ func (p *publisher) run(ctx context.Context, conn *websocket.Conn) error {
 	for {
 		select {
 		case msg := <-p.queue:
-			message, err := grammar.Serialize(msg)
-			if err != nil {
-				p.logger.WarnContext(ctx, "failed to serialize message", "error", err)
-				continue
-			}
-			p.logger.DebugContext(ctx, "sending message", "message", message)
+			p.logger.DebugContext(ctx, "sending message", "message", msg)
 			writeCtx, cancel := context.WithTimeout(ctx, p.timeout)
-			err = conn.Write(writeCtx, websocket.MessageText, []byte(message))
+			err := conn.Write(writeCtx, websocket.MessageText, []byte(msg.Serialize()))
 			if err != nil {
 				p.logger.WarnContext(writeCtx, "failed to write serialized message", "error", errors.WithStack(err))
 			}

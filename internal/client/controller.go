@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"gholden-go/internal/grammar"
 	"io"
 	"log/slog"
@@ -130,15 +129,9 @@ func (c *controller) login(ctx context.Context, challstr grammar.ChallstrMessage
 	// Finish logging in (or renaming) by sending:
 	// /trn USERNAME,0,ASSERTION where USERNAME is your desired username and ASSERTION is data.assertion
 	select {
-	case c.outgoingMessagesCh <- grammar.ClientMessage{
-		Line: &grammar.Line{
-			Message: &grammar.Message{
-				UnknownMessage: &grammar.UnknownMessage{
-					// TODO make this easier to interact with
-					Data: fmt.Sprintf("/trn %s,0,%s", values.Name, l.Assertion),
-				},
-			},
-		},
+	case c.outgoingMessagesCh <- grammar.Rename{
+		Username:  values.Name,
+		Assertion: l.Assertion,
 	}:
 		c.logger.DebugContext(ctx, "sent login command to socket")
 	case <-ctx.Done():
