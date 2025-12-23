@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"gholden-go/internal/grammar"
+	"io"
 	"log/slog"
 	"os"
 	"sync"
@@ -19,6 +20,8 @@ type CLI struct {
 	Timeout       time.Duration `help:"Timeout for individual dials/reads/writes/etc" default:"30s"`
 	Debug         bool          `help:"Enable debug mode"`
 	Logger        *slog.Logger  `kong:"-"`
+	Stdin         io.Reader     `kong:"-"`
+	Stdout        io.Writer     `kong:"-"`
 }
 
 func (c *CLI) Run(ctx context.Context) error {
@@ -78,9 +81,17 @@ func (c *CLI) Run(ctx context.Context) error {
 		loginEndpoint:      c.LoginEndpoint,
 		timeout:            c.Timeout,
 		logger:             c.Logger,
+		stdin:              c.Stdin,
+		stdout:             c.Stdout,
 	})
-	if err := controller.handleIncoming(ctx); err != nil {
-		return errors.WithStack(err)
+	wg.Go(func() {
+		if err := controller.handleIncoming(ctx); err != nil {
+			c.Logger.ErrorContext(ctx, "error running controller", "error", err)
+		}
+	})
+
+	if err := controller.prompt(ctx); err != nil {
+		c.Logger.ErrorContext(ctx, "error running prompt", "error", err)
 	}
 
 	wg.Wait()
