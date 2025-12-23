@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -19,7 +20,10 @@ type controller struct {
 	incomingMessagesCh <-chan grammar.ServerMessage
 	httpClient         *http.Client
 	loginEndpoint      string
+	state              *state
 	logger             *slog.Logger
+	stdin              io.Reader
+	stdout             io.Writer
 }
 
 type controllerOpts struct {
@@ -28,6 +32,8 @@ type controllerOpts struct {
 	loginEndpoint      string                       // required
 	timeout            time.Duration                // required
 	logger             *slog.Logger                 // required
+	stdin              io.Reader                    // required
+	stdout             io.Writer                    // required
 }
 
 func newController(opts controllerOpts) *controller {
@@ -38,7 +44,12 @@ func newController(opts controllerOpts) *controller {
 			Timeout: opts.timeout,
 		},
 		loginEndpoint: opts.loginEndpoint,
-		logger:        opts.logger,
+		state: &state{
+			challstrCh: make(chan struct{}),
+		},
+		logger: opts.logger,
+		stdin:  opts.stdin,
+		stdout: opts.stdout,
 	}
 }
 
@@ -56,23 +67,61 @@ func (c *controller) handleIncoming(ctx context.Context) error {
 				}
 				switch {
 				case line.Message.ChallstrMessage != nil:
-					if err := c.login(ctx, *line.Message.ChallstrMessage); err != nil {
-						c.logger.ErrorContext(ctx, "failed to login", "error", err)
-					} else {
-						c.logger.InfoContext(ctx, "login successful")
+					if err := c.state.setChallstr(line.Message.ChallstrMessage.Challstr); err != nil {
+						c.logger.WarnContext(ctx, "Error setting challstr value", "error", errors.WithStack(err))
+						continue
 					}
 				default:
-					c.logger.InfoContext(ctx, "unsupported message", "message", line)
+					c.logger.DebugContext(ctx, "unsupported message", "message", line)
 				}
 			}
 		}
 	}
 }
 
+func (c *controller) prompt(ctx context.Context) error {
+	// Wait for the challstr to be ready
+	select {
+	case <-ctx.Done():
+		return errors.WithStack(ctx.Err())
+	case <-c.state.challstrCh:
+	}
+
+	login := loginInput{
+		Name: "test" + uuid.New().String()[:12], // generate a random (most likely unused) username for now
+		// NB: The password field must exist but doesn't actually matter unless the username is already registered
+		Pass:     "1234",
+		Challstr: c.state.challstr,
+	}
+	c.logger.InfoContext(ctx, "logging in", "username", login.Name)
+	if err := c.login(ctx, login); err != nil {
+		return errors.WithMessage(err, "failed to login")
+	}
+
+	c.logger.InfoContext(ctx, "enter commands")
+	inputCh := make(chan string)
+	go func() {
+		scanner := bufio.NewScanner(c.stdin)
+		for scanner.Scan() {
+			inputCh <- scanner.Text()
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.WithStack(ctx.Err())
+		case input := <-inputCh:
+			c.logger.InfoContext(ctx, "enter input", "input", input)
+			c.outgoingMessagesCh <- grammar.RawCommand{Command: input}
+		}
+	}
+}
+
 type loginInput struct {
-	Name     string `json:"name"`
-	Pass     string `json:"pass"`
-	Challstr string `json:"challstr"`
+	Name     string `json:"name"`     // required
+	Pass     string `json:"pass"`     // required
+	Challstr string `json:"challstr"` // required
 }
 
 type loginResponse struct {
@@ -81,20 +130,14 @@ type loginResponse struct {
 
 // login logs in to Showdown following the guidance in the protocol documentation:
 // https://github.com/smogon/pokemon-showdown/blob/master/PROTOCOL.md
-func (c *controller) login(ctx context.Context, challstr grammar.ChallstrMessage) error {
+func (c *controller) login(ctx context.Context, input loginInput) error {
 	// From docs:
 	// you'll need to make an HTTP POST request to https://play.pokemonshowdown.com/api/login with the data
 	// name=USERNAME&pass=PASSWORD&challstr=CHALLSTR
 	// USERNAME is your username and PASSWORD is your password, and CHALLSTR is the value you got from |challstr|.
 	// Note that CHALLSTR contains | characters.
-	values := loginInput{
-		Name: "test" + uuid.New().String()[:12], // generate a random (most likely unused) username for now
-		// NB: The password field must exist but doesn't actually matter unless the username is already registered
-		Pass:     "1234",
-		Challstr: challstr.Challstr,
-	}
-	c.logger.DebugContext(ctx, "Sending login request", "values", values)
-	body, err := json.Marshal(values)
+	c.logger.DebugContext(ctx, "Sending login request", "username", input.Name, "challstr", input.Challstr)
+	body, err := json.Marshal(input)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal login input")
 	}
@@ -130,7 +173,7 @@ func (c *controller) login(ctx context.Context, challstr grammar.ChallstrMessage
 	// /trn USERNAME,0,ASSERTION where USERNAME is your desired username and ASSERTION is data.assertion
 	select {
 	case c.outgoingMessagesCh <- grammar.Rename{
-		Username:  values.Name,
+		Username:  input.Name,
 		Assertion: l.Assertion,
 	}:
 		c.logger.DebugContext(ctx, "sent login command to socket")

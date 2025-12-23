@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,6 +56,8 @@ func TestCLI_Login(t *testing.T) {
 		LoginEndpoint: ls.URL,
 		Timeout:       time.Second,
 		Logger:        slogt.New(t, slogt.JSON()),
+		Stdin:         &bytes.Buffer{},
+		Stdout:        &bytes.Buffer{},
 	}
 	go func() {
 		if err := c.Run(t.Context()); err != nil {
