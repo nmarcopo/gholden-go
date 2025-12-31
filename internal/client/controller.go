@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"gholden-go/internal/grammar"
@@ -100,18 +101,22 @@ func (c *controller) prompt(ctx context.Context) error {
 
 	c.logger.InfoContext(ctx, "enter commands")
 	inputCh := make(chan string)
+	scanner := bufio.NewScanner(c.stdin)
 	go func() {
-		scanner := bufio.NewScanner(c.stdin)
 		for scanner.Scan() {
 			inputCh <- scanner.Text()
 		}
+		close(inputCh)
 	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return errors.WithStack(ctx.Err())
-		case input := <-inputCh:
+		case input, ok := <-inputCh:
+			if !ok {
+				return errors.WithMessage(cmp.Or(scanner.Err(), io.EOF), "input channel closed")
+			}
 			c.logger.InfoContext(ctx, "enter input", "input", input)
 			c.outgoingMessagesCh <- grammar.RawCommand{Command: input}
 		}

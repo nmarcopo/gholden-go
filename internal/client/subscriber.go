@@ -2,9 +2,10 @@ package client
 
 import (
 	"context"
-	"gholden-go/internal/grammar"
 	"log/slog"
 	"time"
+
+	"gholden-go/internal/grammar"
 
 	"github.com/coder/websocket"
 	"github.com/pkg/errors"
@@ -27,12 +28,8 @@ func newSubscriber(queue chan<- grammar.ServerMessage, logger *slog.Logger, time
 // run reads messages from the websocket, parses them into structs, and sends the structs to the queue
 func (p *subscriber) run(ctx context.Context, conn *websocket.Conn) error {
 	for {
-		readCtx, cancel := context.WithTimeout(ctx, p.timeout)
-		msgType, msg, err := conn.Read(readCtx)
-		cancel()
+		msgType, msg, err := conn.Read(ctx)
 		if err != nil {
-			// TODO send shutdown signal if this happens
-			p.logger.ErrorContext(ctx, "websocket read error", "error", errors.WithStack(err))
 			return errors.WithStack(err)
 		}
 		p.logger.DebugContext(ctx, "message received", "type", msgType, "body", string(msg))
