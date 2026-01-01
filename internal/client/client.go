@@ -3,12 +3,14 @@ package client
 import (
 	"context"
 	"fmt"
-	"gholden-go/internal/grammar"
 	"io"
 	"log/slog"
 	"os"
-	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+
+	"gholden-go/internal/grammar"
 
 	"github.com/coder/websocket"
 	"github.com/pkg/errors"
@@ -20,8 +22,8 @@ type CLI struct {
 	Timeout       time.Duration `help:"Timeout for individual dials/reads/writes/etc" default:"30s"`
 	Debug         bool          `help:"Enable debug mode"`
 	Logger        *slog.Logger  `kong:"-"`
-	Stdin         io.Reader     `kong:"-"`
-	Stdout        io.Writer     `kong:"-"`
+	Stdin         io.Reader     `kong:"-"` // required
+	Stdout        io.Writer     `kong:"-"` // required
 }
 
 func (c *CLI) Run(ctx context.Context) error {
@@ -57,22 +59,18 @@ func (c *CLI) Run(ctx context.Context) error {
 	// Listen for and log incoming messages from the websocket
 	incomingMessages := make(chan grammar.ServerMessage)
 	s := newSubscriber(incomingMessages, c.Logger, c.Timeout)
-	wg := &sync.WaitGroup{}
-	wg.Go(func() {
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
 		err := s.run(ctx, conn)
-		if err != nil {
-			c.Logger.ErrorContext(ctx, "error running subscriber", "error", err)
-		}
+		return errors.WithMessage(err, "error running subscriber")
 	})
 
 	// Send some messages to the server
 	outgoingMessages := make(chan grammar.ClientMessage)
 	p := newPublisher(outgoingMessages, c.Timeout, c.Logger)
-	wg.Go(func() {
+	g.Go(func() error {
 		err := p.run(ctx, conn)
-		if err != nil {
-			c.Logger.ErrorContext(ctx, "error running publisher", "error", err)
-		}
+		return errors.WithMessage(err, "error running publisher")
 	})
 
 	controller := newController(controllerOpts{
@@ -84,17 +82,14 @@ func (c *CLI) Run(ctx context.Context) error {
 		stdin:              c.Stdin,
 		stdout:             c.Stdout,
 	})
-	wg.Go(func() {
-		if err := controller.handleIncoming(ctx); err != nil {
-			c.Logger.ErrorContext(ctx, "error running controller", "error", err)
-		}
+	g.Go(func() error {
+		err := controller.handleIncoming(ctx)
+		return errors.WithMessage(err, "error running controller")
+	})
+	g.Go(func() error {
+		err := controller.prompt(ctx)
+		return errors.WithMessage(err, "error running prompt")
 	})
 
-	if err := controller.prompt(ctx); err != nil {
-		c.Logger.ErrorContext(ctx, "error running prompt", "error", err)
-	}
-
-	wg.Wait()
-
-	return nil
+	return g.Wait()
 }

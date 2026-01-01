@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,19 +50,31 @@ func TestCLI_Login(t *testing.T) {
 	t.Cleanup(ls.Close)
 	ws := httptest.NewServer(helper.websocketLogin(t))
 	t.Cleanup(ws.Close)
+
+	// Use an io pipe to simulate stdin and stdout. Avoids early EOFs closing the readers early
+	stdin, stdinWriter := io.Pipe()
+	t.Cleanup(func() {
+		if err := stdinWriter.Close(); err != nil {
+			t.Log("error closing stdinWriter", err)
+		}
+	})
+	_, stdoutWriter := io.Pipe()
+	t.Cleanup(func() {
+		if err := stdoutWriter.Close(); err != nil {
+			t.Log("error closing stdoutWriter", err)
+		}
+	})
 	c := &CLI{
 		Address:       ws.URL,
 		LoginEndpoint: ls.URL,
 		Timeout:       time.Second,
 		Logger:        slogt.New(t, slogt.JSON()),
-		Stdin:         &bytes.Buffer{},
-		Stdout:        &bytes.Buffer{},
+		Stdin:         stdin,
+		Stdout:        stdoutWriter,
 	}
 	go func() {
-		if err := c.Run(t.Context()); err != nil {
-			// We don't care about the error itself as long as we've logged in successfully
-			t.Log(err)
-		}
+		// We don't care about the error itself as long as we've logged in successfully
+		c.Run(t.Context())
 	}()
 	select {
 	case <-doneCh:
