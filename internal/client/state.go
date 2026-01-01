@@ -2,18 +2,26 @@ package client
 
 import (
 	"errors"
+	"sync"
 )
 
+type challstr struct {
+	mu       sync.Mutex
+	challstr string
+	set      chan struct{}
+}
+
 type state struct {
-	challstr   string
-	challstrCh chan struct{}
+	challstr challstr
 }
 
 func (s *state) setChallstr(challstr string) error {
-	if s.challstr != "" {
+	s.challstr.mu.Lock()
+	defer s.challstr.mu.Unlock()
+	if s.challstr.challstr != "" {
 		return errors.New("challstr already set")
 	}
-	s.challstr = challstr
-	close(s.challstrCh)
+	s.challstr.challstr = challstr
+	close(s.challstr.set)
 	return nil
 }
