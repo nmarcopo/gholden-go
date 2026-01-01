@@ -6,11 +6,12 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"gholden-go/internal/grammar"
 	"io"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"gholden-go/internal/grammar"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -46,7 +47,9 @@ func newController(opts controllerOpts) *controller {
 		},
 		loginEndpoint: opts.loginEndpoint,
 		state: &state{
-			challstrCh: make(chan struct{}),
+			challstr: challstr{
+				set: make(chan struct{}),
+			},
 		},
 		logger: opts.logger,
 		stdin:  opts.stdin,
@@ -85,14 +88,14 @@ func (c *controller) prompt(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return errors.WithStack(ctx.Err())
-	case <-c.state.challstrCh:
+	case <-c.state.challstr.set:
 	}
 
 	login := loginInput{
 		Name: "test" + uuid.New().String()[:12], // generate a random (most likely unused) username for now
 		// NB: The password field must exist but doesn't actually matter unless the username is already registered
 		Pass:     "1234",
-		Challstr: c.state.challstr,
+		Challstr: c.state.challstr.challstr,
 	}
 	c.logger.InfoContext(ctx, "logging in", "username", login.Name)
 	if err := c.login(ctx, login); err != nil {
